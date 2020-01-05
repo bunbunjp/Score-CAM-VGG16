@@ -1,5 +1,5 @@
 from time import sleep
-from typing import List
+from typing import List, Tuple
 
 import cv2
 import keras
@@ -17,6 +17,17 @@ from fit import create_dnn, normalize
 
 
 def score_cam(model, img_array, layer_name, max_N=-1):
+    """
+    https://qiita.com/futakuchi0117/items/95c518254185ec5ea485
+    こちらを参考に実装しました。
+    thanks @futakuchi0117
+
+    :param model:
+    :param img_array:
+    :param layer_name:
+    :param max_N:
+    :return:
+    """
     cls = np.argmax(model.predict(img_array))
     act_map_array = Model(inputs=model.input,
                           outputs=model.get_layer(layer_name).output).predict(img_array)
@@ -73,6 +84,25 @@ def softmax(x):
     return f
 
 
+NAMES: List[str] = [
+    '飛行機',
+    '自動車',
+    '鳥',
+    '猫',
+    '鹿',
+    '犬',
+    'カエル',
+    '馬',
+    '船',
+    'トラック',
+]
+
+
+def to_name_per_value(pred: np.ndarray) -> Tuple[str, float]:
+    maxidx: int = np.argmax(pred)
+    return NAMES[maxidx], pred[maxidx]
+
+
 if __name__ == '__main__':
     (train_x, train_y), (valid_x, valid_y) = cifar10.load_data()
     valid_y = keras.utils.to_categorical(valid_y)
@@ -85,26 +115,52 @@ if __name__ == '__main__':
                   metrics=['accuracy'])
     model.summary()
 
-    target: List[int] = [10, 20, 30, 40]
+    target: List[int] = [11, 55, 33, 30, 40]
 
+    score_layer: List[str] = [
+        'conv2d_1',
+        'conv2d_2',
+        'conv2d_3',
+        'conv2d_4',
+        'conv2d_5',
+        'conv2d_6',
+        'conv2d_7',
+        'conv2d_8',
+        'conv2d_9',
+        'conv2d_10',
+        'conv2d_11',
+        'conv2d_12',
+    ]
+
+    plt.rcParams['font.family'] = 'IPAexGothic'
     for idx in target:
         grad: np.ndarray = np.zeros_like(a=valid_x[idx], dtype=uint8)
-        grad[:] = grad_cam(input_model=model, x=valid_x[idx],
-                           layer_name='conv2d_12')
-        score = score_cam(model=model, img_array=valid_x[idx:idx + 1],
-                          layer_name='conv2d_6')
         fig: Figure = plt.figure()
-        print('grad is ', np.max(grad), np.min(grad))
-        ax: Axes = fig.add_subplot(1, 3, 1)
-        ax.imshow(grad)
-        ax.axis('off')
+        y: np.ndarray = model.predict(x=valid_x[idx:idx + 1])
+        name, per_value = to_name_per_value(pred=y[0])
+        answer, _ = to_name_per_value(valid_y[idx])
+        fig.suptitle('{0} - {2} : {1:.4f}'.format(name, per_value, answer))
 
-        ax: Axes = fig.add_subplot(1, 3, 2)
-        ax.axis('off')
+        for li, layer in enumerate(score_layer):
+            ax: Axes = fig.add_subplot(3, 6, li + 1)
+            score = score_cam(model=model,
+                              img_array=valid_x[idx: idx + 1],
+                              layer_name=layer)
+            ax.imshow(score)
+        ax: Axes = fig.add_subplot(3, 6, len(score_layer) + 1)
         ax.imshow(valid_x[idx])
 
-        ax: Axes = fig.add_subplot(1, 3, 3)
-        ax.imshow(score * 255)
+        # print('grad is ', np.max(grad), np.min(grad))
+        # ax: Axes = fig.add_subplot(1, 3, 1)
+        # ax.imshow(grad)
+        # ax.axis('off')
+        #
+        # ax: Axes = fig.add_subplot(1, 3, 2)
+        # ax.axis('off')
+        # ax.imshow(valid_x[idx])
+        #
+        # ax: Axes = fig.add_subplot(1, 3, 3)
+        # ax.imshow(score * 255)
         ax.axis('off')
         fig.show()
         plt.show()
